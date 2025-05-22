@@ -1,0 +1,51 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.env
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# PyCharm
+.idea/
+
+# VSCode
+.vscode/
+
+# Data files
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.ckpt
+*.tar.gz
+*.zip
+
+# Dataset folders
+comic_dataset/
+prepared_data/
+results/
+images/
+output/
+
+# Model checkpoints
+checkpoints/
+logs/
+*.log
+
+# System
+.DS_Store
+Thumbs.db
+
+# Python virtual environment cache
+pip-wheel-metadata/
+__pypackages__/
