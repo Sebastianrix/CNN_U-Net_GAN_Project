@@ -48,7 +48,7 @@ def build_unet_lab(input_shape):
     c3 = layers.ReLU()(c3)
     p3 = layers.MaxPooling2D((2, 2))(c3)
 
-    # Bottleneck
+    # Bottleneck with increased capacity
     bn = layers.Conv2D(512, (3, 3), padding='same')(p3)
     bn = layers.BatchNormalization()(bn)
     bn = layers.ReLU()(bn)
@@ -57,7 +57,7 @@ def build_unet_lab(input_shape):
     bn = layers.ReLU()(bn)
     bn = layers.Dropout(0.3)(bn)
 
-    # Decoder
+    # Decoder with residual connections
     u1 = layers.Conv2DTranspose(256, (3, 3), strides=2, padding='same')(bn)
     u1 = layers.concatenate([u1, c3])
     c4 = layers.Conv2D(256, (3, 3), padding='same')(u1)
@@ -66,6 +66,7 @@ def build_unet_lab(input_shape):
     c4 = layers.Conv2D(256, (3, 3), padding='same')(c4)
     c4 = layers.BatchNormalization()(c4)
     c4 = layers.ReLU()(c4)
+    c4 = layers.add([c4, layers.Conv2D(256, (1, 1))(u1)])  # Residual connection
 
     u2 = layers.Conv2DTranspose(128, (3, 3), strides=2, padding='same')(c4)
     u2 = layers.concatenate([u2, c2])
@@ -75,6 +76,7 @@ def build_unet_lab(input_shape):
     c5 = layers.Conv2D(128, (3, 3), padding='same')(c5)
     c5 = layers.BatchNormalization()(c5)
     c5 = layers.ReLU()(c5)
+    c5 = layers.add([c5, layers.Conv2D(128, (1, 1))(u2)])  # Residual connection
 
     u3 = layers.Conv2DTranspose(64, (3, 3), strides=2, padding='same')(c5)
     u3 = layers.concatenate([u3, c1])
@@ -84,25 +86,28 @@ def build_unet_lab(input_shape):
     c6 = layers.Conv2D(64, (3, 3), padding='same')(c6)
     c6 = layers.BatchNormalization()(c6)
     c6 = layers.ReLU()(c6)
+    c6 = layers.add([c6, layers.Conv2D(64, (1, 1))(u3)])  # Residual connection
 
-    # Output layer: 2 channels for a* and b* values
-    outputs = layers.Conv2D(2, (1, 1), activation='tanh')(c6)
-    
-    # Scale the output to match the a* and b* ranges in LAB space
-    outputs = layers.Lambda(lambda x: x * 100)(outputs)
+    # Output layer: 2 channels for a* and b* values with proper scaling
+    outputs = layers.Conv2D(2, (1, 1))(c6)
+    # Scale to proper LAB ranges: a* and b* are typically -128 to +127
+    outputs = layers.Lambda(lambda x: tf.tanh(x) * 127.0)(outputs)
 
     model = models.Model(inputs, outputs)
     return model
 
 @tf.keras.utils.register_keras_serializable()
 def lab_loss(y_true, y_pred):
-    """Combined loss function for LAB color space"""
-    # MSE loss
+    """Enhanced loss function for LAB color space"""
+    # MSE loss with higher weight on larger errors
     mse = tf.keras.losses.MeanSquaredError()(y_true, y_pred)
-    # MAE loss
+    # MAE loss to preserve color boundaries
     mae = tf.keras.losses.MeanAbsoluteError()(y_true, y_pred)
-    # Combine losses (similar weights to RGB version)
-    return 0.84 * mse + 0.16 * mae
+    # Perceptual weight factor (higher weight for larger color differences)
+    color_diff = tf.abs(y_true - y_pred)
+    perceptual_weight = tf.exp(color_diff / 50.0)  # Exponential scaling
+    weighted_loss = tf.reduce_mean(perceptual_weight * (0.84 * mse + 0.16 * mae))
+    return weighted_loss
 
 class ColorizeVisualizerCallback(tf.keras.callbacks.Callback):
     def __init__(self, validation_data, log_dir, num_samples=3):
@@ -168,15 +173,15 @@ def get_callbacks(model_dir, log_dir, validation_data):
             mode='min'
         ),
         tf.keras.callbacks.EarlyStopping(
-            patience=15,
+            patience=30,  # Increased patience
             restore_best_weights=True,
             monitor='val_loss'
         ),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
             factor=0.2,
-            patience=5,
-            min_lr=1e-6,
+            patience=10,  # Increased patience
+            min_lr=1e-7,  # Lower minimum learning rate
             verbose=1
         ),
         tf.keras.callbacks.TensorBoard(
