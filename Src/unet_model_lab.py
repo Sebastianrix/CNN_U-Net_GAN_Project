@@ -91,7 +91,7 @@ def build_unet_lab(input_shape):
     # Output layer: 2 channels for a* and b* values with proper scaling
     outputs = layers.Conv2D(2, (1, 1))(c6)
     # Scale to proper LAB ranges: a* and b* are typically -128 to +127
-    outputs = layers.Lambda(lambda x: tf.tanh(x) * 127.0)(outputs)
+    outputs = layers.Lambda(lambda x: x * 128.0)(outputs)  # Direct linear scaling without tanh
 
     model = models.Model(inputs, outputs)
     return model
@@ -99,15 +99,17 @@ def build_unet_lab(input_shape):
 @tf.keras.utils.register_keras_serializable()
 def lab_loss(y_true, y_pred):
     """Enhanced loss function for LAB color space"""
-    # MSE loss with higher weight on larger errors
+    # Balanced combination of losses
     mse = tf.keras.losses.MeanSquaredError()(y_true, y_pred)
-    # MAE loss to preserve color boundaries
     mae = tf.keras.losses.MeanAbsoluteError()(y_true, y_pred)
-    # Perceptual weight factor (higher weight for larger color differences)
+    
+    # Color difference weighting
     color_diff = tf.abs(y_true - y_pred)
-    perceptual_weight = tf.exp(color_diff / 50.0)  # Exponential scaling
-    weighted_loss = tf.reduce_mean(perceptual_weight * (0.84 * mse + 0.16 * mae))
-    return weighted_loss
+    perceptual_weight = tf.clip_by_value(1.0 + color_diff / 100.0, 1.0, 2.0)  # Linear scaling with clip
+    
+    # Combined loss with perceptual weighting
+    weighted_loss = (mse + mae) * perceptual_weight
+    return tf.reduce_mean(weighted_loss)
 
 class ColorizeVisualizerCallback(tf.keras.callbacks.Callback):
     def __init__(self, validation_data, log_dir, num_samples=3):

@@ -8,16 +8,24 @@ import tensorflow as tf
 # Add Src directory to path for importing our model
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))  # Add Src directory to path
-from unet_model_lab import rgb_to_lab, lab_to_rgb, lab_loss
+from unet_model_lab import rgb_to_lab, lab_to_rgb, lab_loss, build_unet_lab
 
 # Enable unsafe deserialization for Lambda layers
 keras.config.enable_unsafe_deserialization()
 
+def scale_output(x):
+    return tf.tanh(x) * 127.0
+
+def output_shape(input_shape):
+    return input_shape
+
 def test_model(model_path, num_samples=5):
     print(f"\nTesting model: {model_path}")
     try:
-        # Load model
-        model = load_model(model_path, custom_objects={'lab_loss': lab_loss})
+        # Create a new model with the same architecture
+        model = build_unet_lab((256, 256, 1))
+        # Load the weights from the saved model
+        model.load_weights(model_path)
         print("Model loaded successfully")
 
         # Load test data
