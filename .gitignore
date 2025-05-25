@@ -28,7 +28,7 @@ venv.bak/
 *.hdf5
 *.ckpt
 *.tar.gz
-*.zip
+
 
 # Dataset folders
 comic_dataset/
@@ -39,8 +39,7 @@ output/
 
 # Model checkpoints
 checkpoints/
-logs/
-*.log
+
 
 # System
 .DS_Store
