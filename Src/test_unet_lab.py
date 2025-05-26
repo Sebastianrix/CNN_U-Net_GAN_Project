@@ -105,7 +105,7 @@ if __name__ == "__main__":
     print(f"Looking for models in: {models_dir}")
     
     models_to_test = [
-        os.path.join(models_dir, "best_unet_lab_v7.keras")
+        os.path.join(models_dir, "best_unet_lab_v8.keras")
     ]
 
     for model_path in models_to_test:
