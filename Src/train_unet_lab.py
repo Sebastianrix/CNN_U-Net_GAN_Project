@@ -69,7 +69,7 @@ if __name__ == "__main__":
     model = build_unet_lab((256, 256, 1))
     
     # Use simple Adam optimizer with fixed learning rate
-    optimizer = Adam(learning_rate=1e-4)
+    optimizer = Adam(learning_rate=2e-4)
     
     model.compile(
         optimizer=optimizer,
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     
     callbacks = [
         tf.keras.callbacks.ModelCheckpoint(
-            os.path.join(models_dir, "best_unet_lab_v7.keras"),
+            os.path.join(models_dir, "best_unet_lab_v8.keras"),
             monitor='val_loss',
             save_best_only=True,
             mode='min',
@@ -91,8 +91,15 @@ if __name__ == "__main__":
         ),
         tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=10,
+            patience=15,
             restore_best_weights=True,
+            verbose=1
+        ),
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.5,
+            patience=5,
+            min_lr=1e-6,
             verbose=1
         )
     ]
@@ -102,8 +109,8 @@ if __name__ == "__main__":
     history = model.fit(
         X_train,
         y_train,
-        batch_size=32,
-        epochs=50,
+        batch_size=64,
+        epochs=200,
         validation_split=0.2,
         callbacks=callbacks,
         verbose=1

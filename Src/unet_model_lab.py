@@ -91,7 +91,8 @@ def build_unet_lab(input_shape):
 
     # Final output - scale to proper LAB ranges
     x = layers.Conv2D(2, (1, 1), padding='same')(x)
-    outputs = layers.Lambda(lambda x: x * 127.0)(x)  # Scale to full LAB range
+    x = layers.Activation('tanh')(x)  # Output in [-1, 1]
+    outputs = layers.Lambda(lambda x: x * 127.0)(x)  # Scale to [-127, 127]
 
     model = models.Model(inputs, outputs)
     return model
@@ -99,6 +100,9 @@ def build_unet_lab(input_shape):
 @tf.keras.utils.register_keras_serializable()
 def lab_loss(y_true, y_pred):
     """Simple L1 + L2 loss for LAB color space"""
+    # Ensure predictions are in valid range
+    y_pred = tf.clip_by_value(y_pred, -127.0, 127.0)
+    
     # Basic L1 (MAE) and L2 (MSE) losses
     mae = tf.abs(y_true - y_pred)
     mse = tf.square(y_true - y_pred)
