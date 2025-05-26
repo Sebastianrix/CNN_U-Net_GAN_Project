@@ -33,9 +33,7 @@ venv.bak/
 # Dataset folders
 comic_dataset/
 prepared_data/
-results/
-images/
-output/
+
 
 # Model checkpoints
 checkpoints/
