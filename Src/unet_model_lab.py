@@ -22,94 +22,89 @@ def lab_to_rgb(lab_image):
 def build_unet_lab(input_shape):
     """Build U-Net model for LAB color space (predicting a and b channels)"""
     inputs = layers.Input(shape=input_shape)
-
+    
     # Encoder
-    c1 = layers.Conv2D(64, (3, 3), padding='same')(inputs)
-    c1 = layers.BatchNormalization()(c1)
-    c1 = layers.ReLU()(c1)
-    c1 = layers.Conv2D(64, (3, 3), padding='same')(c1)
-    c1 = layers.BatchNormalization()(c1)
-    c1 = layers.ReLU()(c1)
-    p1 = layers.MaxPooling2D((2, 2))(c1)
+    x = layers.Conv2D(64, (3, 3), padding='same', kernel_initializer='he_normal')(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(64, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    skip1 = x
+    x = layers.MaxPooling2D((2, 2))(x)
 
-    c2 = layers.Conv2D(128, (3, 3), padding='same')(p1)
-    c2 = layers.BatchNormalization()(c2)
-    c2 = layers.ReLU()(c2)
-    c2 = layers.Conv2D(128, (3, 3), padding='same')(c2)
-    c2 = layers.BatchNormalization()(c2)
-    c2 = layers.ReLU()(c2)
-    p2 = layers.MaxPooling2D((2, 2))(c2)
+    # Level 2
+    x = layers.Conv2D(128, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(128, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    skip2 = x
+    x = layers.MaxPooling2D((2, 2))(x)
 
-    c3 = layers.Conv2D(256, (3, 3), padding='same')(p2)
-    c3 = layers.BatchNormalization()(c3)
-    c3 = layers.ReLU()(c3)
-    c3 = layers.Conv2D(256, (3, 3), padding='same')(c3)
-    c3 = layers.BatchNormalization()(c3)
-    c3 = layers.ReLU()(c3)
-    p3 = layers.MaxPooling2D((2, 2))(c3)
+    # Level 3
+    x = layers.Conv2D(256, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(256, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    skip3 = x
+    x = layers.MaxPooling2D((2, 2))(x)
 
-    # Bottleneck with increased capacity
-    bn = layers.Conv2D(512, (3, 3), padding='same')(p3)
-    bn = layers.BatchNormalization()(bn)
-    bn = layers.ReLU()(bn)
-    bn = layers.Conv2D(512, (3, 3), padding='same')(bn)
-    bn = layers.BatchNormalization()(bn)
-    bn = layers.ReLU()(bn)
-    bn = layers.Dropout(0.3)(bn)
+    # Bottleneck
+    x = layers.Conv2D(512, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(512, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
 
-    # Decoder with residual connections
-    u1 = layers.Conv2DTranspose(256, (3, 3), strides=2, padding='same')(bn)
-    u1 = layers.concatenate([u1, c3])
-    c4 = layers.Conv2D(256, (3, 3), padding='same')(u1)
-    c4 = layers.BatchNormalization()(c4)
-    c4 = layers.ReLU()(c4)
-    c4 = layers.Conv2D(256, (3, 3), padding='same')(c4)
-    c4 = layers.BatchNormalization()(c4)
-    c4 = layers.ReLU()(c4)
-    c4 = layers.add([c4, layers.Conv2D(256, (1, 1))(u1)])  # Residual connection
+    # Decoder
+    x = layers.Conv2DTranspose(256, (2, 2), strides=(2, 2), padding='same')(x)
+    x = layers.concatenate([x, skip3])
+    x = layers.Conv2D(256, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(256, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
 
-    u2 = layers.Conv2DTranspose(128, (3, 3), strides=2, padding='same')(c4)
-    u2 = layers.concatenate([u2, c2])
-    c5 = layers.Conv2D(128, (3, 3), padding='same')(u2)
-    c5 = layers.BatchNormalization()(c5)
-    c5 = layers.ReLU()(c5)
-    c5 = layers.Conv2D(128, (3, 3), padding='same')(c5)
-    c5 = layers.BatchNormalization()(c5)
-    c5 = layers.ReLU()(c5)
-    c5 = layers.add([c5, layers.Conv2D(128, (1, 1))(u2)])  # Residual connection
+    x = layers.Conv2DTranspose(128, (2, 2), strides=(2, 2), padding='same')(x)
+    x = layers.concatenate([x, skip2])
+    x = layers.Conv2D(128, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(128, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
 
-    u3 = layers.Conv2DTranspose(64, (3, 3), strides=2, padding='same')(c5)
-    u3 = layers.concatenate([u3, c1])
-    c6 = layers.Conv2D(64, (3, 3), padding='same')(u3)
-    c6 = layers.BatchNormalization()(c6)
-    c6 = layers.ReLU()(c6)
-    c6 = layers.Conv2D(64, (3, 3), padding='same')(c6)
-    c6 = layers.BatchNormalization()(c6)
-    c6 = layers.ReLU()(c6)
-    c6 = layers.add([c6, layers.Conv2D(64, (1, 1))(u3)])  # Residual connection
+    x = layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding='same')(x)
+    x = layers.concatenate([x, skip1])
+    x = layers.Conv2D(64, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(64, (3, 3), padding='same', kernel_initializer='he_normal')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
 
-    # Output layer: 2 channels for a* and b* values with proper scaling
-    outputs = layers.Conv2D(2, (1, 1))(c6)
-    # Scale to proper LAB ranges: a* and b* are typically -128 to +127
-    outputs = layers.Lambda(lambda x: x * 128.0)(outputs)  # Direct linear scaling without tanh
+    # Final output - scale to proper LAB ranges
+    x = layers.Conv2D(2, (1, 1), padding='same')(x)
+    outputs = layers.Lambda(lambda x: x * 127.0)(x)  # Scale to full LAB range
 
     model = models.Model(inputs, outputs)
     return model
 
 @tf.keras.utils.register_keras_serializable()
 def lab_loss(y_true, y_pred):
-    """Enhanced loss function for LAB color space"""
-    # Balanced combination of losses
-    mse = tf.keras.losses.MeanSquaredError()(y_true, y_pred)
-    mae = tf.keras.losses.MeanAbsoluteError()(y_true, y_pred)
+    """Simple L1 + L2 loss for LAB color space"""
+    # Basic L1 (MAE) and L2 (MSE) losses
+    mae = tf.abs(y_true - y_pred)
+    mse = tf.square(y_true - y_pred)
     
-    # Color difference weighting
-    color_diff = tf.abs(y_true - y_pred)
-    perceptual_weight = tf.clip_by_value(1.0 + color_diff / 100.0, 1.0, 2.0)  # Linear scaling with clip
-    
-    # Combined loss with perceptual weighting
-    weighted_loss = (mse + mae) * perceptual_weight
-    return tf.reduce_mean(weighted_loss)
+    # Combine losses
+    return tf.reduce_mean(mae) + 0.5 * tf.reduce_mean(mse)
 
 class ColorizeVisualizerCallback(tf.keras.callbacks.Callback):
     def __init__(self, validation_data, log_dir, num_samples=3):
@@ -117,9 +112,6 @@ class ColorizeVisualizerCallback(tf.keras.callbacks.Callback):
         self.X_val, self.y_val = validation_data
         self.num_samples = min(num_samples, len(self.X_val))
         self.file_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'colorization_samples'))
-        
-        # Convert validation ground truth to LAB
-        self.y_val_lab = np.array([rgb_to_lab(img) for img in self.y_val[:self.num_samples]])
         
     def plot_to_image(self, figure):
         """Convert matplotlib figure to PNG."""
@@ -137,28 +129,40 @@ class ColorizeVisualizerCallback(tf.keras.callbacks.Callback):
             
             fig = plt.figure(figsize=(15, 5 * self.num_samples))
             for i in range(self.num_samples):
-                # Original grayscale
-                plt.subplot(self.num_samples, 3, i*3 + 1)
-                plt.imshow(self.X_val[i].squeeze(), cmap='gray')
-                plt.title('Input (Grayscale)')
-                plt.axis('off')
+                # Original grayscale (denormalize from [-1, 1] to [0, 100])
+                l_channel = (self.X_val[i] * 50.0) + 50.0
                 
                 # Predicted color
-                l_channel = self.y_val_lab[i, :, :, 0:1]
                 predicted_lab = np.concatenate([l_channel, predictions[i]], axis=-1)
                 predicted_rgb = lab_to_rgb(predicted_lab)
+                
+                # Ground truth
+                true_lab = np.concatenate([l_channel, self.y_val[i]], axis=-1)
+                true_rgb = lab_to_rgb(true_lab)
+                
+                # Plot results
+                plt.subplot(self.num_samples, 3, i*3 + 1)
+                plt.imshow(l_channel.squeeze(), cmap='gray')
+                plt.title('Input (Grayscale)')
+                plt.axis('off')
                 
                 plt.subplot(self.num_samples, 3, i*3 + 2)
                 plt.imshow(predicted_rgb)
                 plt.title('Predicted')
                 plt.axis('off')
                 
-                # Ground truth
                 plt.subplot(self.num_samples, 3, i*3 + 3)
-                plt.imshow(self.y_val[i])
+                plt.imshow(true_rgb)
                 plt.title('Ground Truth')
                 plt.axis('off')
+                
+                # Print color space ranges for debugging
+                print(f"\nSample {i+1} ranges:")
+                print(f"L channel range: [{l_channel.min():.2f}, {l_channel.max():.2f}]")
+                print(f"Predicted A channel range: [{predictions[i,:,:,0].min():.2f}, {predictions[i,:,:,0].max():.2f}]")
+                print(f"Predicted B channel range: [{predictions[i,:,:,1].min():.2f}, {predictions[i,:,:,1].max():.2f}]")
             
+            plt.suptitle(f"Results for LAB U-Net - Epoch {epoch}")
             plt.tight_layout()
             
             # Log the plot to TensorBoard
