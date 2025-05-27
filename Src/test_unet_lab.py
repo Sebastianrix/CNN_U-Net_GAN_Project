@@ -15,46 +15,36 @@ keras.config.enable_unsafe_deserialization()
 
 def test_model(model_path, num_samples=5):
     print(f"\nTesting model: {model_path}")
+    
+    # Create Results directory if it doesn't exist
+    output_dir = "Results"
+    os.makedirs(output_dir, exist_ok=True)
+    
     try:
-        # Create output directory for results
-        model_name = os.path.splitext(os.path.basename(model_path))[0]
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Results', model_name)
-        os.makedirs(output_dir, exist_ok=True)
-        print(f"Created output directory: {output_dir}")
-        
         # Load model
-        print(f"Loading model from: {model_path}")
         model = load_model(model_path, custom_objects={'lab_loss': lab_loss})
         print("Model loaded successfully")
 
         # Load test data
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Data', 'prepared_data')
-        print(f"Loading test data from: {data_dir}")
-        
-        test_input_path = os.path.join(data_dir, "comic_input_grayscale_test.npy")
-        test_output_path = os.path.join(data_dir, "comic_output_color_test.npy")
-        
-        if not os.path.exists(test_input_path) or not os.path.exists(test_output_path):
-            print(f"Error: Test data not found at {data_dir}")
-            return
-            
-        X_test = np.load(test_input_path)
-        y_test = np.load(test_output_path)
-        print(f"Test data loaded. Shapes - Input: {X_test.shape}, Output: {y_test.shape}")
+        X_test = np.load("Data/prepared_data/comic_input_grayscale_test.npy")
+        y_test = np.load("Data/prepared_data/comic_output_color_test.npy")
+        print("Test data loaded")
 
-        # Convert to LAB color space
-        print("Converting to LAB color space...")
-        lab_images = np.array([rgb_to_lab(img) for img in y_test])
-        l_channel = lab_images[:, :, :, 0:1]
-        ab_channels = lab_images[:, :, :, 1:]
+        # Convert RGB test data to LAB
+        print("Converting RGB to LAB...")
+        lab_images = rgb_to_lab(y_test)
         
-        # Normalize L channel
+        # Extract L channel and normalize to [-1, 1]
+        l_channel = lab_images[:, :, :, 0:1]
         X_test = (l_channel - 50.0) / 50.0
         print("Data preprocessing completed")
 
         # Make predictions
         print("Making predictions...")
         predictions = model.predict(X_test[:num_samples], verbose=1)
+        
+        # Denormalize predictions (scale back to LAB ranges)
+        predictions = predictions.clip(-127, 127)  # Ensure valid LAB ranges
         print("Predictions completed")
         
         # Print prediction statistics
@@ -62,7 +52,7 @@ def test_model(model_path, num_samples=5):
         print(f"A channel range: [{predictions[..., 0].min():.2f}, {predictions[..., 0].max():.2f}]")
         print(f"B channel range: [{predictions[..., 1].min():.2f}, {predictions[..., 1].max():.2f}]")
 
-        # Plot results
+        # Plot and save results
         for i in range(num_samples):
             print(f"\nProcessing sample {i+1}...")
             fig, axes = plt.subplots(1, 3, figsize=(15, 5))
@@ -94,10 +84,16 @@ def test_model(model_path, num_samples=5):
             plt.savefig(save_path)
             plt.close()
             
+            # Also save individual images
+            plt.imsave(os.path.join(output_dir, f'grayscale_{i+1}.png'), l_channel[i].squeeze(), cmap='gray')
+            plt.imsave(os.path.join(output_dir, f'predicted_{i+1}.png'), predicted_rgb)
+            plt.imsave(os.path.join(output_dir, f'ground_truth_{i+1}.png'), y_test[i])
+        
+        print("\nTesting completed successfully!")
+        
     except Exception as e:
-        import traceback
-        print(f"Error testing model {model_path}:")
-        print(traceback.format_exc())
+        print(f"Error testing model {model_path}: {str(e)}")
+        raise e
 
 if __name__ == "__main__":
     # Test LAB models

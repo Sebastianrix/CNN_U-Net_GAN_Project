@@ -89,9 +89,11 @@ def build_unet_lab(input_shape):
     x = layers.BatchNormalization()(x)
     x = layers.ReLU()(x)
 
-    # Final output - scale to proper LAB ranges
+    # Final output layer - directly predict a and b channels
     x = layers.Conv2D(2, (1, 1), padding='same')(x)
-    x = layers.Activation('tanh')(x)  # Output in [-1, 1]
+    
+    # Use tanh activation scaled to LAB color space range
+    x = layers.Activation('tanh')(x)
     outputs = layers.Lambda(lambda x: x * 127.0)(x)  # Scale to [-127, 127]
 
     model = models.Model(inputs, outputs)
@@ -99,16 +101,22 @@ def build_unet_lab(input_shape):
 
 @tf.keras.utils.register_keras_serializable()
 def lab_loss(y_true, y_pred):
-    """Simple L1 + L2 loss for LAB color space"""
+    """Custom loss function for LAB color space prediction
+    
+    Args:
+        y_true: Ground truth ab channels in range [-127, 127]
+        y_pred: Predicted ab channels in range [-127, 127]
+    """
     # Ensure predictions are in valid range
     y_pred = tf.clip_by_value(y_pred, -127.0, 127.0)
     
-    # Basic L1 (MAE) and L2 (MSE) losses
-    mae = tf.abs(y_true - y_pred)
-    mse = tf.square(y_true - y_pred)
+    # Calculate color-aware loss
+    # Give more weight to the absolute error to preserve color accuracy
+    mae = tf.reduce_mean(tf.abs(y_true - y_pred))
+    mse = tf.reduce_mean(tf.square(y_true - y_pred))
     
-    # Combine losses
-    return tf.reduce_mean(mae) + 0.5 * tf.reduce_mean(mse)
+    # Combine losses with emphasis on absolute error
+    return 0.7 * mae + 0.3 * mse
 
 class ColorizeVisualizerCallback(tf.keras.callbacks.Callback):
     def __init__(self, validation_data, log_dir, num_samples=3):
