@@ -4,3 +4,12 @@ matplotlib>=3.5.0
 scikit-image>=0.19.0
 h5py>=3.7.0
 pillow>=9.0.0 
+
+Kaggle
+matplotlib
+tensorflow
+pandas
+seaborn
+scikit-image
+pydot
+graphviz
