@@ -8,9 +8,12 @@ import matplotlib.pyplot as plt
 
 def rgb_to_hsv(rgb_image):
     """Convert RGB image to HSV color space"""
-    # Ensure the input is in range [0, 1]
+    # Ensure the input is in range [0, 1] and float32
     if rgb_image.max() > 1.0:
         rgb_image = rgb_image / 255.0
+    
+    # Convert to float32 for OpenCV
+    rgb_image = rgb_image.astype(np.float32)
     
     # Convert to HSV
     if len(rgb_image.shape) == 4:
@@ -24,6 +27,9 @@ def rgb_to_hsv(rgb_image):
 
 def hsv_to_rgb(hsv_image):
     """Convert HSV image to RGB color space"""
+    # Ensure float32 for OpenCV
+    hsv_image = hsv_image.astype(np.float32)
+    
     # Convert to RGB
     if len(hsv_image.shape) == 4:
         rgb_images = []
