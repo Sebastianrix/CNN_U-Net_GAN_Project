@@ -1,9 +1,8 @@
 import tensorflow as tf
 
-print("TensorFlow version:", tf.__version__)
-print("\nNum GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-print("\nGPU Devices:", tf.config.list_physical_devices('GPU'))
-print("\nIs built with CUDA:", tf.test.is_built_with_cuda())
+print('TensorFlow version:', tf.__version__)
+print('Num GPUs Available:', len(tf.config.list_physical_devices('GPU')))
+print('GPU devices:', tf.config.list_physical_devices('GPU'))
 
 print('\nTrying a simple GPU operation...')
 try:
