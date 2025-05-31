@@ -20,15 +20,28 @@ def rgb_to_hsv(rgb_image):
         hsv_images = []
         for img in rgb_image:
             hsv_img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+            # Convert H from [0, 180] to [0, 179] and S from [0, 255] to [0, 255]
+            hsv_img[..., 0] = hsv_img[..., 0] * (179/180)
             hsv_images.append(hsv_img)
         return np.array(hsv_images)
     else:
-        return cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
+        hsv_img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
+        # Convert H from [0, 180] to [0, 179]
+        hsv_img[..., 0] = hsv_img[..., 0] * (179/180)
+        return hsv_img
 
 def hsv_to_rgb(hsv_image):
     """Convert HSV image to RGB color space"""
     # Ensure float32 for OpenCV
     hsv_image = hsv_image.astype(np.float32)
+    
+    # Convert H from [0, 360] to [0, 180] for OpenCV
+    hsv_image = hsv_image.copy()  # Make a copy to avoid modifying the original
+    hsv_image[..., 0] = hsv_image[..., 0] * (180/360)
+    
+    # Convert S from [0, 1] to [0, 255] if needed
+    if hsv_image[..., 1].max() <= 1.0:
+        hsv_image[..., 1] = hsv_image[..., 1] * 255.0
     
     # Convert to RGB
     if len(hsv_image.shape) == 4:

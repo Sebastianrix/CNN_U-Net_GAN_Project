@@ -1,48 +1,47 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Environment
-.env
-.venv/
-env/
+*.so
+.Python
 venv/
 ENV/
-env.bak/
-venv.bak/
 
-# Jupyter Notebook Checkpoints
-.ipynb_checkpoints/
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
 
-# PyCharm
-.idea/
-
-# VSCode
-.vscode/
-
-# Data files
-*.npy
-*.npz
-*.h5
-*.hdf5
-*.ckpt
+# Training and modal files
+logs/
+Results/
+*.log
+train_output_*.log
+train_error_*.log
+*.keras
+*.Models/
+*.tar
+*.zip
 *.tar.gz
 
 
-# Dataset folders
-comic_dataset/
-prepared_data/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-
-# Model checkpoints
-checkpoints/
-
-
-# System
+# OS
 .DS_Store
 Thumbs.db
 
-# Python virtual environment cache
-pip-wheel-metadata/
-__pypackages__/
+# Data (consider using git-lfs for large files)
+Data/raw/*
+!Data/raw/.gitkeep
+Data/prepared_data/*
+!Data/prepared_data/.gitkeep
+
+# API Keys and sensitive information
+API Key here/
+*.env
+.env*
+credentials.json
