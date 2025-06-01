@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import load_model
-import keras
+import tensorflow.keras as keras
 import os
 import tensorflow as tf
 import sys
@@ -11,18 +11,18 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from unet_model_hsv import rgb_to_hsv, hsv_to_rgb, hsv_loss
 
 # Enable unsafe deserialization for Lambda layers
-keras.config.enable_unsafe_deserialization()
+tf.keras.mixed_precision.set_global_policy('float32')
 
 def test_model(model_path, num_samples=5):
     print(f"\nTesting model: {model_path}")
     
     # Create Results directory if it doesn't exist
-    output_dir = "Results"
+    output_dir = "Results/unet_hsv_test"
     os.makedirs(output_dir, exist_ok=True)
     
     try:
         # Load model
-        model = load_model(model_path, custom_objects={'hsv_loss': hsv_loss})
+        model = load_model(model_path, custom_objects={'hsv_loss': hsv_loss}, safe_mode=False)
         print("Model loaded successfully")
 
         # Load test data
@@ -60,14 +60,22 @@ def test_model(model_path, num_samples=5):
             
             # Predicted colorization
             predicted_hsv = np.concatenate([predictions[i], v_channel[i]], axis=-1)
+            # Ensure HSV values are in the correct range
+            predicted_hsv = predicted_hsv.copy()
+            predicted_hsv[..., 0] = np.clip(predicted_hsv[..., 0], 0, 179)  # H channel
+            predicted_hsv[..., 1] = np.clip(predicted_hsv[..., 1], 0, 255)  # S channel
+            predicted_hsv[..., 2] = np.clip(predicted_hsv[..., 2], 0, 1)    # V channel
             predicted_rgb = hsv_to_rgb(predicted_hsv)
+            # Ensure RGB values are in [0, 1]
+            predicted_rgb = np.clip(predicted_rgb, 0, 255).astype(np.float32) / 255.0
             
             axes[1].imshow(predicted_rgb)
             axes[1].set_title("Predicted Color")
             axes[1].axis("off")
             
-            # Ground truth
-            axes[2].imshow(y_test[i])
+            # Ground truth (normalize to [0, 1])
+            ground_truth = np.clip(y_test[i], 0, 255).astype(np.float32) / 255.0
+            axes[2].imshow(ground_truth)
             axes[2].set_title("Ground Truth")
             axes[2].axis("off")
             
@@ -83,7 +91,7 @@ def test_model(model_path, num_samples=5):
             # Also save individual images
             plt.imsave(os.path.join(output_dir, f'grayscale_{i+1}.png'), v_channel[i].squeeze(), cmap='gray')
             plt.imsave(os.path.join(output_dir, f'predicted_{i+1}.png'), predicted_rgb)
-            plt.imsave(os.path.join(output_dir, f'ground_truth_{i+1}.png'), y_test[i])
+            plt.imsave(os.path.join(output_dir, f'ground_truth_{i+1}.png'), ground_truth)
         
         print("\nTesting completed successfully!")
         

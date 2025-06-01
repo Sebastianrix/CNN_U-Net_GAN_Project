@@ -199,29 +199,19 @@ class ColorizeGAN:
         
         inputs = layers.Input(shape=input_shape)
         
-        # Multi-scale discrimination
-        scales = []
+        # Single scale discrimination for stability
         x = inputs
-        num_scales = 3
+        x = discriminator_block(x, 64, stride=2)
+        x = discriminator_block(x, 128)
+        x = discriminator_block(x, 256)
+        x = discriminator_block(x, 512)
         
-        for i in range(num_scales):
-            if i > 0:
-                x = layers.AveragePooling2D(pool_size=(2, 2))(x)
-            
-            # Discriminator network for this scale
-            d = x
-            d = discriminator_block(d, 64, stride=1 if i > 0 else 2)
-            d = discriminator_block(d, 128)
-            d = discriminator_block(d, 256)
-            d = discriminator_block(d, 512)
-            
-            # Output for this scale
-            d = SpectralNormalization(
-                layers.Conv2D(1, 4, padding='same')
-            )(d)
-            scales.append(d)
+        # Output layer
+        x = SpectralNormalization(
+            layers.Conv2D(1, 4, padding='same')
+        )(x)
         
-        return models.Model(inputs, scales, name='discriminator')
+        return models.Model(inputs, x, name='discriminator')
     
     def _build_vgg(self):
         """Build VGG model for perceptual loss"""
@@ -234,11 +224,12 @@ class ColorizeGAN:
         return models.Model(vgg.input, outputs)
     
     def _build_gan(self):
+        """Build combined GAN model"""
         self.discriminator.trainable = False
         inputs = layers.Input(shape=(self.img_size, self.img_size, 1))
         gen_output = self.generator(inputs)
-        disc_outputs = self.discriminator(gen_output)
-        return models.Model(inputs, [gen_output] + disc_outputs)
+        disc_output = self.discriminator(gen_output)
+        return models.Model(inputs, [gen_output, disc_output])
     
     def compile(self, gen_lr=1e-4, disc_lr=4e-4):
         """Compile with WGAN-GP loss and additional perceptual losses"""
@@ -262,18 +253,21 @@ class ColorizeGAN:
         self.lambda_hist = 5.0  # Histogram matching weight
     
     def gradient_penalty(self, real, fake):
-        """WGAN-GP gradient penalty"""
-        batch_size = tf.shape(real)[0]
-        alpha = tf.random.uniform([batch_size, 1, 1, 1])
+        """Compute gradient penalty"""
+        # Cast inputs to float32 for gradient penalty calculation
+        real = tf.cast(real, tf.float32)
+        fake = tf.cast(fake, tf.float32)
+        
+        alpha = tf.random.uniform(shape=[tf.shape(real)[0], 1, 1, 1], minval=0., maxval=1.)
         interpolated = alpha * real + (1 - alpha) * fake
         
         with tf.GradientTape() as tape:
             tape.watch(interpolated)
-            pred = self.discriminator(interpolated)[0]
-        
+            pred = self.discriminator(interpolated, training=True)
+            
         gradients = tape.gradient(pred, interpolated)
         slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), axis=[1, 2, 3]))
-        return tf.reduce_mean(tf.square(slopes - 1.0))
+        return tf.reduce_mean(tf.square(slopes - 1))
     
     def feature_matching_loss(self, real_features, fake_features):
         """Feature matching loss across discriminator scales"""
@@ -284,6 +278,15 @@ class ColorizeGAN:
     
     def perceptual_loss(self, real_rgb, fake_rgb):
         """VGG-based perceptual loss"""
+        # Ensure proper shape and range for VGG input
+        real_rgb = tf.image.resize(real_rgb, [self.img_size, self.img_size])
+        fake_rgb = tf.image.resize(fake_rgb, [self.img_size, self.img_size])
+        
+        # VGG expects values in [0, 255]
+        real_rgb = real_rgb * 255.0
+        fake_rgb = fake_rgb * 255.0
+        
+        # Get VGG features
         real_features = self.vgg(real_rgb)
         fake_features = self.vgg(fake_rgb)
         
@@ -310,74 +313,139 @@ class ColorizeGAN:
     
     @tf.function
     def train_step(self, grayscale_images, color_images):
-        """Single training step with improved losses"""
+        """Single training step"""
         batch_size = tf.shape(grayscale_images)[0]
         
-        with tf.GradientTape(persistent=True) as tape:
-            # Generate fake images
+        with tf.GradientTape() as disc_tape, tf.GradientTape() as gen_tape:
+            # Generate fake colors
             fake_colors = self.generator(grayscale_images, training=True)
             
-            # Get discriminator outputs for real and fake
+            # Discriminator predictions
             real_outputs = self.discriminator(color_images, training=True)
             fake_outputs = self.discriminator(fake_colors, training=True)
             
-            # Discriminator losses
-            disc_loss = 0
-            for real_out, fake_out in zip(real_outputs, fake_outputs):
-                disc_loss += tf.reduce_mean(fake_out) - tf.reduce_mean(real_out)
-            
             # Gradient penalty
             gp = self.gradient_penalty(color_images, fake_colors)
+            
+            # Discriminator loss
+            disc_loss = tf.reduce_mean(fake_outputs) - tf.reduce_mean(real_outputs)
+            disc_loss = tf.cast(disc_loss, tf.float32)  # Cast to float32
+            gp = tf.cast(gp, tf.float32)  # Cast to float32
             disc_loss += self.lambda_gp * gp
             
-            # Generator losses
-            gen_loss = 0
-            for fake_out in fake_outputs:
-                gen_loss -= tf.reduce_mean(fake_out)
-            
             # Feature matching loss
-            fm_loss = self.feature_matching_loss(real_outputs, fake_outputs)
-            gen_loss += self.lambda_fm * fm_loss
+            real_features = self.vgg(tf.concat([grayscale_images] * 3, axis=-1))
+            fake_features = self.vgg(tf.concat([grayscale_images] * 3, axis=-1))
+            fm_loss = self.feature_matching_loss(real_features, fake_features)
             
-            # Convert to RGB for perceptual loss if needed
-            if self.color_space != ColorSpace.RGB:
-                if self.color_space == ColorSpace.LAB:
-                    from unet_model_lab import lab_to_rgb
-                    fake_rgb = lab_to_rgb(tf.concat([grayscale_images, fake_colors], axis=-1))
-                    real_rgb = lab_to_rgb(tf.concat([grayscale_images, color_images], axis=-1))
-                else:  # HSV
-                    # Create full HSV tensors
-                    fake_hsv = tf.concat([fake_colors, grayscale_images * 255.0], axis=-1)
-                    real_hsv = tf.concat([color_images, grayscale_images * 255.0], axis=-1)
-                    # Convert to RGB
-                    fake_rgb = hsv_to_rgb(fake_hsv)
-                    real_rgb = hsv_to_rgb(real_hsv)
-            else:
-                fake_rgb = fake_colors
+            # Perceptual loss (if using RGB color space)
+            if self.color_space == ColorSpace.RGB:
                 real_rgb = color_images
+                fake_rgb = fake_colors
+            else:
+                # Convert to RGB for perceptual loss
+                if self.color_space == ColorSpace.HSV:
+                    # Create full HSV images
+                    color_images_f32 = tf.cast(color_images, tf.float32)
+                    fake_colors_f32 = tf.cast(fake_colors, tf.float32)
+                    grayscale_v = grayscale_images * 255.0
+                    
+                    # Create full HSV images (H, S from generated/real, V from grayscale)
+                    real_hsv = tf.concat([color_images_f32[..., 0:1], color_images_f32[..., 1:2], grayscale_v], axis=-1)
+                    fake_hsv = tf.concat([fake_colors_f32[..., 0:1], fake_colors_f32[..., 1:2], grayscale_v], axis=-1)
+                    
+                    def convert_hsv_to_rgb(hsv_tensor):
+                        """Convert HSV tensor to RGB tensor using TensorFlow operations"""
+                        # Normalize HSV values to [0, 1]
+                        h = hsv_tensor[..., 0:1] / 179.0  # H: [0, 179] -> [0, 1]
+                        s = hsv_tensor[..., 1:2] / 255.0  # S: [0, 255] -> [0, 1]
+                        v = hsv_tensor[..., 2:3] / 255.0  # V: [0, 255] -> [0, 1]
+                        
+                        # Convert using TensorFlow operations
+                        c = v * s
+                        h_prime = h * 6.0
+                        x = c * (1 - tf.abs(tf.math.mod(h_prime, 2.0) - 1))
+                        m = v - c
+                        
+                        # Initialize RGB arrays
+                        zeros = tf.zeros_like(h)
+                        ones = tf.ones_like(h)
+                        
+                        # Calculate RGB based on h_prime ranges
+                        mask0 = tf.cast(h_prime < 1.0, tf.float32)
+                        mask1 = tf.cast((h_prime >= 1.0) & (h_prime < 2.0), tf.float32)
+                        mask2 = tf.cast((h_prime >= 2.0) & (h_prime < 3.0), tf.float32)
+                        mask3 = tf.cast((h_prime >= 3.0) & (h_prime < 4.0), tf.float32)
+                        mask4 = tf.cast((h_prime >= 4.0) & (h_prime < 5.0), tf.float32)
+                        mask5 = tf.cast(h_prime >= 5.0, tf.float32)
+                        
+                        r = c * mask0 + x * mask1 + zeros * mask2 + zeros * mask3 + x * mask4 + c * mask5
+                        g = x * mask0 + c * mask1 + c * mask2 + x * mask3 + zeros * mask4 + zeros * mask5
+                        b = zeros * mask0 + zeros * mask1 + x * mask2 + c * mask3 + c * mask4 + x * mask5
+                        
+                        r = r + m
+                        g = g + m
+                        b = b + m
+                        
+                        # Combine channels and ensure range [0, 1]
+                        rgb = tf.concat([r, g, b], axis=-1)
+                        rgb = tf.clip_by_value(rgb, 0.0, 1.0)
+                        
+                        return rgb
+                    
+                    real_rgb = convert_hsv_to_rgb(real_hsv)
+                    fake_rgb = convert_hsv_to_rgb(fake_hsv)
+                    
+                    # Set shapes explicitly
+                    real_rgb.set_shape(grayscale_images.shape[:-1] + (3,))
+                    fake_rgb.set_shape(grayscale_images.shape[:-1] + (3,))
+                else:  # LAB
+                    real_lab = tf.concat([grayscale_images * 100.0, color_images], axis=-1)
+                    fake_lab = tf.concat([grayscale_images * 100.0, fake_colors], axis=-1)
+                    
+                    def convert_lab_to_rgb(lab):
+                        # Process each image in the batch separately
+                        def process_single_image(single_lab):
+                            # Convert to numpy and ensure proper shape
+                            lab_np = single_lab.numpy()
+                            # Convert to RGB
+                            rgb = cv2.cvtColor(lab_np.astype(np.float32), cv2.COLOR_LAB2RGB)
+                            return rgb.astype(np.float32)
+                        
+                        # Process each image in the batch
+                        rgb_list = tf.map_fn(lambda x: tf.py_function(process_single_image, [x], tf.float32), lab)
+                        return rgb_list
+                    
+                    real_rgb = convert_lab_to_rgb(real_lab)
+                    fake_rgb = convert_lab_to_rgb(fake_lab)
+                    
+                    # Set shapes explicitly
+                    real_rgb.set_shape(grayscale_images.shape[:-1] + (3,))
+                    fake_rgb.set_shape(grayscale_images.shape[:-1] + (3,))
             
-            # Perceptual loss
             perc_loss = self.perceptual_loss(real_rgb, fake_rgb)
-            gen_loss += self.lambda_perc * perc_loss
+            hist_loss = self.histogram_loss(real_rgb, fake_rgb)
             
-            # Histogram matching loss
-            hist_loss = self.histogram_loss(color_images, fake_colors)
-            gen_loss += self.lambda_hist * hist_loss
+            # Total generator loss
+            gen_loss = -tf.reduce_mean(fake_outputs)
+            gen_loss = tf.cast(gen_loss, tf.float32)  # Cast to float32
+            fm_loss = tf.cast(fm_loss, tf.float32)  # Cast to float32
+            perc_loss = tf.cast(perc_loss, tf.float32)  # Cast to float32
+            hist_loss = tf.cast(hist_loss, tf.float32)  # Cast to float32
+            gen_loss += self.lambda_fm * fm_loss + self.lambda_perc * perc_loss + self.lambda_hist * hist_loss
         
-        # Calculate gradients
-        disc_vars = self.discriminator.trainable_variables
-        gen_vars = self.generator.trainable_variables
+        # Compute gradients
+        disc_grads = disc_tape.gradient(disc_loss, self.discriminator.trainable_variables)
+        gen_grads = gen_tape.gradient(gen_loss, self.generator.trainable_variables)
         
-        disc_gradients = tape.gradient(disc_loss, disc_vars)
-        gen_gradients = tape.gradient(gen_loss, gen_vars)
+        # Create gradient-variable pairs, filtering out None gradients
+        disc_grads_and_vars = [(g, v) for g, v in zip(disc_grads, self.discriminator.trainable_variables) if g is not None]
+        gen_grads_and_vars = [(g, v) for g, v in zip(gen_grads, self.generator.trainable_variables) if g is not None]
         
-        # Apply gradients
-        if disc_gradients is not None and any(g is not None for g in disc_gradients):
-            disc_grads_and_vars = [(g, v) for g, v in zip(disc_gradients, disc_vars) if g is not None]
+        # Apply gradients if there are any
+        if disc_grads_and_vars:
             self.disc_optimizer.apply_gradients(disc_grads_and_vars)
-        
-        if gen_gradients is not None and any(g is not None for g in gen_gradients):
-            gen_grads_and_vars = [(g, v) for g, v in zip(gen_gradients, gen_vars) if g is not None]
+        if gen_grads_and_vars:
             self.gen_optimizer.apply_gradients(gen_grads_and_vars)
         
         return {
@@ -387,4 +455,4 @@ class ColorizeGAN:
             'fm_loss': fm_loss,
             'perc_loss': perc_loss,
             'hist_loss': hist_loss
-        } 
+        }

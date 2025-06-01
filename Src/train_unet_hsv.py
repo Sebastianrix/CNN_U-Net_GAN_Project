@@ -12,7 +12,15 @@ from unet_model_hsv import build_unet_hsv, hsv_loss, rgb_to_hsv, get_callbacks
 def prepare_hsv_data(rgb_images):
     """Prepare training data in HSV color space"""
     print("Converting RGB images to HSV...")
+    print(f"Input RGB shape: {rgb_images.shape}, dtype: {rgb_images.dtype}, range: [{rgb_images.min()}, {rgb_images.max()}]")
+    
+    # Normalize RGB to [0, 1] if needed
+    if rgb_images.dtype == np.uint8 or rgb_images.max() > 1.0:
+        print("Normalizing RGB values to [0, 1]...")
+        rgb_images = rgb_images.astype(np.float32) / 255.0
+    
     hsv_images = rgb_to_hsv(rgb_images)
+    print(f"HSV shape: {hsv_images.shape}, range: H[{hsv_images[...,0].min()}, {hsv_images[...,0].max()}], S[{hsv_images[...,1].min()}, {hsv_images[...,1].max()}], V[{hsv_images[...,2].min()}, {hsv_images[...,2].max()}]")
     
     # Split into V channel (input) and H,S channels (target)
     v_channel = hsv_images[..., 2:3]  # Value channel
@@ -23,6 +31,9 @@ def prepare_hsv_data(rgb_images):
     
     # H and S channels are our targets
     y = hs_channels
+    
+    print(f"Prepared X shape: {X.shape}, range: [{X.min()}, {X.max()}]")
+    print(f"Prepared y shape: {y.shape}, range: [{y.min()}, {y.max()}]")
     
     return X, y
 

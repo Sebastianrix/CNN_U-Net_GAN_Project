@@ -15,15 +15,20 @@ ENV/
 logs/
 Results/
 tf_gpu_env/
+wsl_env/
+tf_env_wsl/
+tf_env/
 *.log
 train_output_*.log
 train_error_*.log
 *.keras
 *.Models/
+
+*.bin
 *.tar
 *.zip
 *.tar.gz
-
+*.jpg
 
 # IDE
 .vscode/

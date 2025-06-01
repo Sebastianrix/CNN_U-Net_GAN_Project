@@ -9,25 +9,28 @@ import matplotlib.pyplot as plt
 def rgb_to_hsv(rgb_image):
     """Convert RGB image to HSV color space"""
     # Ensure the input is in range [0, 1] and float32
+    if rgb_image.dtype != np.float32:
+        rgb_image = rgb_image.astype(np.float32)
     if rgb_image.max() > 1.0:
         rgb_image = rgb_image / 255.0
-    
-    # Convert to float32 for OpenCV
-    rgb_image = rgb_image.astype(np.float32)
     
     # Convert to HSV
     if len(rgb_image.shape) == 4:
         hsv_images = []
         for img in rgb_image:
             hsv_img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-            # Convert H from [0, 180] to [0, 179] and S from [0, 255] to [0, 255]
-            hsv_img[..., 0] = hsv_img[..., 0] * (179/180)
+            # Normalize H to [0, 179] and S to [0, 255]
+            hsv_img[..., 0] = np.clip(hsv_img[..., 0], 0, 179)  # H channel
+            hsv_img[..., 1] = np.clip(hsv_img[..., 1], 0, 255)  # S channel
+            hsv_img[..., 2] = np.clip(hsv_img[..., 2], 0, 1)    # V channel
             hsv_images.append(hsv_img)
         return np.array(hsv_images)
     else:
         hsv_img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
-        # Convert H from [0, 180] to [0, 179]
-        hsv_img[..., 0] = hsv_img[..., 0] * (179/180)
+        # Normalize H to [0, 179] and S to [0, 255]
+        hsv_img[..., 0] = np.clip(hsv_img[..., 0], 0, 179)  # H channel
+        hsv_img[..., 1] = np.clip(hsv_img[..., 1], 0, 255)  # S channel
+        hsv_img[..., 2] = np.clip(hsv_img[..., 2], 0, 1)    # V channel
         return hsv_img
 
 def hsv_to_rgb(hsv_image):
@@ -35,13 +38,11 @@ def hsv_to_rgb(hsv_image):
     # Ensure float32 for OpenCV
     hsv_image = hsv_image.astype(np.float32)
     
-    # Convert H from [0, 360] to [0, 180] for OpenCV
+    # Ensure proper ranges for H [0, 179], S [0, 255], V [0, 1]
     hsv_image = hsv_image.copy()  # Make a copy to avoid modifying the original
-    hsv_image[..., 0] = hsv_image[..., 0] * (180/360)
-    
-    # Convert S from [0, 1] to [0, 255] if needed
-    if hsv_image[..., 1].max() <= 1.0:
-        hsv_image[..., 1] = hsv_image[..., 1] * 255.0
+    hsv_image[..., 0] = np.clip(hsv_image[..., 0], 0, 179)  # H channel
+    hsv_image[..., 1] = np.clip(hsv_image[..., 1], 0, 255)  # S channel
+    hsv_image[..., 2] = np.clip(hsv_image[..., 2], 0, 1)    # V channel
     
     # Convert to RGB
     if len(hsv_image.shape) == 4:
