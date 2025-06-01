@@ -22,6 +22,7 @@ tf_env/
 train_output_*.log
 train_error_*.log
 *.keras
+*.h5
 *.Models/
 
 *.bin
