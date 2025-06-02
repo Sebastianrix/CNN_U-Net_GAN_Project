@@ -66,11 +66,12 @@ def build_unet(input_shape):
     c6 = layers.BatchNormalization()(c6)
     c6 = layers.ReLU()(c6)
 
-    # Output layer with tanh, rescaled to [0, 1], cast to float32 for stability
+    # Output layer with tanh in [-1, 1]
     outputs = layers.Conv2D(3, (1, 1), activation='tanh')(c6)
     outputs = layers.Lambda(lambda x: (x + 1.0) / 2.0, dtype='float32')(outputs)
-
+    
     model = models.Model(inputs, outputs)
+
     return model
 
 def get_callbacks():
