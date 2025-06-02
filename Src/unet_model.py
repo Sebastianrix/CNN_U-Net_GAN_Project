@@ -36,7 +36,7 @@ def build_unet(input_shape):
     bn = layers.Conv2D(512, (3, 3), padding='same')(bn)
     bn = layers.BatchNormalization()(bn)
     bn = layers.ReLU()(bn)
-    bn = layers.Dropout(0.3)(bn)  # Add dropout to prevent overfitting
+    bn = layers.Dropout(0.3)(bn)  # Dropout to reduce overfitting
 
     # Decoder
     u1 = layers.Conv2DTranspose(256, (3, 3), strides=2, padding='same')(bn)
@@ -66,9 +66,9 @@ def build_unet(input_shape):
     c6 = layers.BatchNormalization()(c6)
     c6 = layers.ReLU()(c6)
 
-    # Final output with tanh activation scaled to [0,1]
+    # Output layer with tanh, rescaled to [0, 1], cast to float32 for stability
     outputs = layers.Conv2D(3, (1, 1), activation='tanh')(c6)
-    outputs = layers.Lambda(lambda x: (x + 1.0) / 2.0)(outputs)
+    outputs = layers.Lambda(lambda x: (x + 1.0) / 2.0, dtype='float32')(outputs)
 
     model = models.Model(inputs, outputs)
     return model
@@ -89,4 +89,4 @@ def get_callbacks():
         verbose=1
     )
 
-    return [reduce_lr, early_stopping] 
+    return [reduce_lr, early_stopping]
