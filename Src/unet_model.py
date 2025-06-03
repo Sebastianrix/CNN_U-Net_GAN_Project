@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
-def build_unet(input_shape):
+def build_unet(input_shape, output_channels=3, use_scaling=True):
     inputs = layers.Input(shape=input_shape)
 
     # Encoder
@@ -66,9 +66,11 @@ def build_unet(input_shape):
     c6 = layers.BatchNormalization()(c6)
     c6 = layers.ReLU()(c6)
 
-    # Output layer with tanh in [-1, 1]
-    outputs = layers.Conv2D(3, (1, 1), activation='tanh')(c6)
-    outputs = layers.Lambda(lambda x: (x + 1.0) / 2.0, dtype='float32')(outputs)
+    # Output layer with flexible output channels depending on color space
+    outputs = layers.Conv2D(output_channels, (1, 1), activation='tanh')(c6)
+
+    if use_scaling:
+        outputs = layers.Lambda(lambda x: (x + 1.0) / 2.0, dtype='float32')(outputs)
     
     model = models.Model(inputs, outputs)
 
@@ -85,7 +87,7 @@ def get_callbacks():
 
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor='val_loss',
-        patience=10,
+        patience=20,
         restore_best_weights=True,
         verbose=1
     )
