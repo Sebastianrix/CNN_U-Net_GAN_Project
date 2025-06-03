@@ -12,18 +12,7 @@ ENV/
 *.ipynb_checkpoints/
 
 # Training and modal files
-logs/
-Results/
-tf_gpu_env/
-wsl_env/
-tf_env_wsl/
-tf_env/
-*.log
-train_output_*.log
-train_error_*.log
 *.keras
-*.h5
-*.Models/
 
 *.bin
 *.tar
@@ -41,14 +30,7 @@ train_error_*.log
 .DS_Store
 Thumbs.db
 
-# Data (consider using git-lfs for large files)
-Data/raw/*
-!Data/raw/.gitkeep
-Data/prepared_data/*
-!Data/prepared_data/.gitkeep
+# Data
+*.Data/
+*.Data/prepared_data/
 
-# API Keys and sensitive information
-API Key here/
-*.env
-.env*
-credentials.json
