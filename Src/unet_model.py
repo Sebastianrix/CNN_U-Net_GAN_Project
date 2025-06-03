@@ -67,10 +67,11 @@ def build_unet(input_shape, output_channels=3, use_scaling=True):
     c6 = layers.ReLU()(c6)
 
     # Output layer with flexible output channels depending on color space
-    outputs = layers.Conv2D(output_channels, (1, 1), activation='tanh')(c6)
-
-    if use_scaling:
-        outputs = layers.Lambda(lambda x: (x + 1.0) / 2.0, dtype='float32')(outputs)
+    if output_mode == 'rgb':  
+        outputs = layers.Conv2D(3, (1,1), activation='sigmoid')(c6)  # 3-channel RGB output in [0,1]  
+    else:  # lab or hsv  
+        outputs = layers.Conv2D(output_channels, (1,1), activation='tanh')(c6)  
+        outputs = layers.Lambda(lambda x: (x+1.0)/2.0, dtype='float32')(outputs)  # scale to [0,1] 
     
     model = models.Model(inputs, outputs)
 
