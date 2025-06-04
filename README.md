@@ -10,7 +10,8 @@ A deep learning project to colorize grayscale comic images using a U-Net archite
 ├── Data/               # Data directory
 │   ├── comic_dataset/  # Raw comic images
 │   └── prepared_data/  # Preprocessed numpy arrays
-├── Src/                # the model architecture
+├── Results/            # Generated result-images from the model 
+├── Src/                # the model architecture and generate results
 └── Notebooks/          # Jupyter notebooks (both loading data and training)
 
 ```
