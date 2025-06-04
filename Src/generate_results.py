@@ -57,7 +57,7 @@ for i in range(len(x_test)):
 
     # Prediction
     axes[1].imshow(np.clip(predictions[i], 0, 1)) 
-    axes[1].set_title('Predicted (Clipped)')
+    axes[1].set_title('Predicted (Normalized)')
     axes[1].axis('off')
 
     # Ground Truth
@@ -68,5 +68,5 @@ for i in range(len(x_test)):
     # Save the results
     plt.suptitle(f'Results for Image {i+1}', fontsize=16)
     plt.tight_layout()
-    plt.savefig(os.path.join(SAVE_DIR, f'result_clipped_{i:04d}.png'))
+    plt.savefig(os.path.join(SAVE_DIR, f'result_normalized_{i:04d}.png'))
     plt.close()
